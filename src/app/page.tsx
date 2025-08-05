@@ -28,7 +28,7 @@ export default function CopilotKitPage() {
         defaultOpen={true}
         labels={{
           title: "Popup Assistant",
-          initial: "👋 Hi, there! You're chatting with an agent. This agent comes with a few tools to get you started.\n\nFor example you can try:\n- **Frontend Tools**: \"Set the theme to orange\"\n- **Shared State**: \"Write a proverb about AI\"\n- **Generative UI**: \"Get the weather in SF\"\n\nAs you interact with the agent, you'll see the UI update in real-time to reflect the agent's **state**, **tool calls**, and **progress**."
+          initial: "👋 Hi, there! You're chatting with an agent. This agent comes with a few tools to get you started.\n\nFor example you can try:\n- **Frontend Tools**: \"Set the theme to orange\"\n- **Shared State**: \"Write a proverb about AI\"\n- **Generative UI**: \"Get the weather in SF\" (shows weather info in chat)\n- **Weather Cards**: \"Add a weather card for Beijing to the center of the page\" (adds persistent weather cards)\n\nAs you interact with the agent, you'll see the UI update in real-time to reflect the agent's **state**, **tool calls**, and **progress**."
         }}
       />
     </main>
@@ -38,6 +38,7 @@ export default function CopilotKitPage() {
 // State of the agent, make sure this aligns with your agent's state.
 type AgentState = {
   proverbs: string[];
+  weather_cards: Array<{ location: string; id: string }>;
 }
 
 function YourMainContent({ themeColor }: { themeColor: string }) {
@@ -48,6 +49,7 @@ function YourMainContent({ themeColor }: { themeColor: string }) {
       proverbs: [
         "CopilotKit may be new, but its the best thing since sliced bread.",
       ],
+      weather_cards: [],
     },
   })
 
@@ -80,39 +82,109 @@ function YourMainContent({ themeColor }: { themeColor: string }) {
     },
   });
 
+  // 🎯 NEW: Add weather card to center of page (Frontend Action)
+  useCopilotAction({
+    name: "add_weather_card_to_center",
+    description: "Add a weather card for a specific location to the center of the page.",
+    parameters: [
+      { name: "location", type: "string", required: true, description: "The location for the weather card" },
+    ],
+    handler: ({ location }) => {
+      console.log("Adding weather card for:", location);
+      const newCard = {
+        location,
+        id: `weather-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      };
+      const currentWeatherCards = Array.isArray(state.weather_cards) ? state.weather_cards : [];
+      console.log("Current weather cards:", currentWeatherCards);
+      const updatedWeatherCards = [...currentWeatherCards, newCard];
+      console.log("Updated weather cards:", updatedWeatherCards);
+      setState({
+        ...state,
+        weather_cards: updatedWeatherCards,
+      });
+    },
+  });
+
+  // 🎯 NEW: Remove weather card from center (Frontend Action)
+  useCopilotAction({
+    name: "remove_weather_card",
+    description: "Remove a weather card from the center of the page.",
+    parameters: [
+      { name: "location", type: "string", required: true, description: "The location of the weather card to remove" },
+    ],
+    handler: ({ location }) => {
+      const currentWeatherCards = Array.isArray(state.weather_cards) ? state.weather_cards : [];
+      setState({
+        ...state,
+        weather_cards: currentWeatherCards.filter(card => card.location !== location),
+      });
+    },
+  });
+
   return (
     <div
       style={{ backgroundColor: themeColor }}
-      className="h-screen w-screen flex justify-center items-center flex-col transition-colors duration-300"
+      className="h-screen w-screen transition-colors duration-300 relative"
     >
-      <div className="bg-white/20 backdrop-blur-md p-8 rounded-2xl shadow-xl max-w-2xl w-full">
-        <h1 className="text-4xl font-bold text-white mb-2 text-center">Proverbs</h1>
-        <p className="text-gray-200 text-center italic mb-6">This is a demonstrative page, but it could be anything you want! 🪁</p>
-        <hr className="border-white/20 my-6" />
-        <div className="flex flex-col gap-3">
-          {state.proverbs?.map((proverb, index) => (
-            <div 
-              key={index} 
-              className="bg-white/15 p-4 rounded-xl text-white relative group hover:bg-white/20 transition-all"
-            >
-              <p className="pr-8">{proverb}</p>
-              <button 
-                onClick={() => setState({
-                  ...state,
-                  proverbs: state.proverbs?.filter((_, i) => i !== index),
-                })}
-                className="absolute right-3 top-3 opacity-0 group-hover:opacity-100 transition-opacity 
-                  bg-red-500 hover:bg-red-600 text-white rounded-full h-6 w-6 flex items-center justify-center"
-              >
-                ✕
-              </button>
+      {/* 🎯 Weather Cards in Center */}
+      {(() => {
+        console.log("Rendering weather cards. State:", state.weather_cards);
+        return Array.isArray(state.weather_cards) && state.weather_cards.length > 0 ? (
+          <div className="absolute inset-0 flex items-center justify-center z-10">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-w-6xl w-full p-4">
+              {state.weather_cards.map((card) => (
+                <WeatherCard 
+                  key={card.id}
+                  location={card.location} 
+                  themeColor={themeColor}
+                  onRemove={() => {
+                    const currentWeatherCards = Array.isArray(state.weather_cards) ? state.weather_cards : [];
+                    setState({
+                      ...state,
+                      weather_cards: currentWeatherCards.filter(c => c.id !== card.id),
+                    });
+                  }}
+                />
+            ))}
             </div>
-          ))}
+          </div>
+        ) : null;
+      })()}
+
+      {/* Main Content - Only show when no weather cards */}
+      {(!Array.isArray(state.weather_cards) || state.weather_cards.length === 0) && (
+        <div className="h-screen w-screen flex justify-center items-center flex-col">
+          <div className="bg-white/20 backdrop-blur-md p-8 rounded-2xl shadow-xl max-w-2xl w-full">
+            <h1 className="text-4xl font-bold text-white mb-2 text-center">Proverbs</h1>
+            <p className="text-gray-200 text-center italic mb-6">This is a demonstrative page, but it could be anything you want! 🪁</p>
+            <hr className="border-white/20 my-6" />
+            <div className="flex flex-col gap-3">
+              {state.proverbs?.map((proverb, index) => (
+                <div 
+                  key={index} 
+                  className="bg-white/15 p-4 rounded-xl text-white relative group hover:bg-white/20 transition-all"
+                >
+                  <p className="pr-8">{proverb}</p>
+                  <button 
+                    onClick={() => setState({
+                      ...state,
+                      proverbs: state.proverbs?.filter((_, i) => i !== index),
+                    })}
+                    className="absolute right-3 top-3 opacity-0 group-hover:opacity-100 transition-opacity 
+                      bg-red-500 hover:bg-red-600 text-white rounded-full h-6 w-6 flex items-center justify-center"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+            {state.proverbs?.length === 0 && <p className="text-center text-white/80 italic my-8">
+              No proverbs yet. Ask the assistant to add some!
+            </p>}
+          </div>
         </div>
-        {state.proverbs?.length === 0 && <p className="text-center text-white/80 italic my-8">
-          No proverbs yet. Ask the assistant to add some!
-        </p>}
-      </div>
+      )}
     </div>
   );
 }
@@ -129,12 +201,29 @@ function SunIcon() {
 
 // Weather card component where the location and themeColor are based on what the agent
 // sets via tool calls.
-function WeatherCard({ location, themeColor }: { location?: string, themeColor: string }) {
-  return (
+function WeatherCard({ 
+  location, 
+  themeColor, 
+  onRemove 
+}: { 
+  location?: string, 
+  themeColor: string,
+  onRemove?: () => void 
+}) {
+    return (
     <div
-    style={{ backgroundColor: themeColor }}
-    className="rounded-xl shadow-xl mt-6 mb-4 max-w-md w-full"
-  >
+      style={{ backgroundColor: themeColor }}
+      className="rounded-xl shadow-xl max-w-md w-full relative group"
+    >
+      {onRemove && (
+        <button
+          onClick={onRemove}
+          className="absolute -top-2 -right-2 opacity-0 group-hover:opacity-100 transition-opacity 
+            bg-red-500 hover:bg-red-600 text-white rounded-full h-6 w-6 flex items-center justify-center z-10"
+        >
+          ✕
+        </button>
+      )}
     <div className="bg-white/20 p-4 w-full">
       <div className="flex items-center justify-between">
         <div>

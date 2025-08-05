@@ -20,10 +20,10 @@ class AgentState(MessagesState):
     Here we define the state of the agent
 
     In this instance, we're inheriting from CopilotKitState, which will bring in
-    the CopilotKitState fields. We're also adding a custom field, `language`,
-    which will be used to set the language of the agent.
+    the CopilotKitState fields. We're also adding custom fields for proverbs and weather cards.
     """
     proverbs: List[str] = []
+    weather_cards: List[dict] = []
     tools: List[Any]
     # your_custom_agent_state: str = ""
 
@@ -80,7 +80,19 @@ async def chat_node(state: AgentState, config: RunnableConfig) -> Command[Litera
 
     # 3. Define the system message by which the chat model will be run
     system_message = SystemMessage(
-        content=f"You are a helpful assistant. The current proverbs are {state.get('proverbs', [])}."
+        content=f"""You are a helpful assistant. The current proverbs are {state.get('proverbs', [])}.
+
+Available tools:
+- Backend tools (handled by server): get_weather
+- Frontend tools (handled by UI): add_weather_card_to_center, remove_weather_card, addProverb, setThemeColor
+
+When users ask for weather information:
+- Use 'get_weather' to show weather info in chat
+- Use 'add_weather_card_to_center' to add persistent weather cards to the page center
+
+When users ask to add weather cards to the page, use the 'add_weather_card_to_center' tool with the location parameter.
+
+Choose the appropriate tool based on user intent. When explaining tool names, use plain text instead of code blocks to avoid HTML nesting issues."""
     )
 
     # 4. Run the model to generate a response
@@ -89,17 +101,43 @@ async def chat_node(state: AgentState, config: RunnableConfig) -> Command[Litera
         *state["messages"],
     ], config)
 
-    # only route to tool node if tool is not in the tools list
-    if route_to_tool_node(response):
-        print("routing to tool node")
-        return Command(
-            goto="tool_node",
-            update={
-                "messages": [response],
-            }
-        )
+    # Check if response has tool calls
+    tool_calls = getattr(response, "tool_calls", None)
+    if tool_calls:
+        # Separate backend tools from AG-UI tools
+        backend_tool_calls = []
+        ag_ui_tool_calls = []
+        
+        for tool_call in tool_calls:
+            tool_name = tool_call.get("name")
+            if tool_name in backend_tool_names:
+                backend_tool_calls.append(tool_call)
+            else:
+                # AG-UI tools - these will be handled by frontend
+                ag_ui_tool_calls.append(tool_call)
+        
+        # If we have backend tool calls, route to tool_node
+        if backend_tool_calls:
+            print(f"routing to tool node for backend tools: {[tc.get('name') for tc in backend_tool_calls]}")
+            return Command(
+                goto="tool_node",
+                update={
+                    "messages": [response],
+                }
+            )
+        
+        # If we only have AG-UI tool calls, end the graph
+        # The frontend will handle these tool calls
+        if ag_ui_tool_calls:
+            print(f"AG-UI tools will be handled by frontend: {[tc.get('name') for tc in ag_ui_tool_calls]}")
+            return Command(
+                goto=END,
+                update={
+                    "messages": [response],
+                }
+            )
 
-    # 5. We've handled all tool calls, so we can end the graph.
+    # 5. No tool calls, so we can end the graph.
     return Command(
         goto=END,
         update={
@@ -110,13 +148,17 @@ async def chat_node(state: AgentState, config: RunnableConfig) -> Command[Litera
 def route_to_tool_node(response: BaseMessage):
     """
     Route to tool node if any tool call in the response matches a backend tool name.
+    AG-UI tools are handled by the frontend, so we only route backend tools to tool_node.
     """
     tool_calls = getattr(response, "tool_calls", None)
     if not tool_calls:
         return False
 
     for tool_call in tool_calls:
-        if tool_call.get("name") in backend_tool_names:
+        tool_name = tool_call.get("name")
+        # Only route backend tools to tool_node
+        # AG-UI tools (like add_weather_card_to_center) are handled by frontend
+        if tool_name in backend_tool_names:
             return True
     return False
 
