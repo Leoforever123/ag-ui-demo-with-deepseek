@@ -14,6 +14,7 @@ from langgraph.graph import StateGraph, END
 from langgraph.types import Command
 from langgraph.graph import MessagesState
 from langgraph.prebuilt import ToolNode
+from tools.weather import get_weather, get_weather_data_for_ui, get_weather_forecast
 
 class AgentState(MessagesState):
     """
@@ -27,21 +28,10 @@ class AgentState(MessagesState):
     tools: List[Any]
     # your_custom_agent_state: str = ""
 
-@tool
-def get_weather(location: str):
-    """
-    Get the weather for a given location.
-    """
-    return f"The weather for {location} is 70 degrees."
-
-# @tool
-# def your_tool_here(your_arg: str):
-#     """Your tool description here."""
-#     print(f"Your tool logic here")
-#     return "Your tool response here."
-
 backend_tools = [
-    get_weather
+    get_weather,
+    get_weather_data_for_ui,
+    get_weather_forecast
     # your_tool_here
 ]
 
@@ -83,14 +73,20 @@ async def chat_node(state: AgentState, config: RunnableConfig) -> Command[Litera
         content=f"""You are a helpful assistant. The current proverbs are {state.get('proverbs', [])}.
 
 Available tools:
-- Backend tools (handled by server): get_weather
+- Backend tools (handled by server): get_weather, get_weather_data_for_ui, get_weather_forecast
 - Frontend tools (handled by UI): add_weather_card_to_center, remove_weather_card, addProverb, setThemeColor
 
 When users ask for weather information:
-- Use 'get_weather' to show weather info in chat
-- Use 'add_weather_card_to_center' to add persistent weather cards to the page center
+- if user ask for weather information and require a weather card, use 'get_weather_data_for_ui' to get weather data and then use 'add_weather_card_to_center' to add a dynamic weather card to the center of the page
+- Use 'get_weather' to show current weather info in chat
+- Use 'get_weather_data_for_ui' to get structured weather data for UI components
+- Use 'get_weather_forecast' to show weather forecast info in chat
+- Use 'add_weather_card_to_center' to add a dynamic weather card to the center of the page
 
-When users ask to add weather cards to the page, use the 'add_weather_card_to_center' tool with the location parameter.
+When users ask to add weather cards to the page:
+1. First call 'get_weather_data_for_ui' with the location to get weather data
+2. Then call 'add_weather_card_to_center' with the location and weather data
+This will create a dynamic weather card with real-time data from the backend. 
 
 Choose the appropriate tool based on user intent. When explaining tool names, use plain text instead of code blocks to avoid HTML nesting issues."""
     )

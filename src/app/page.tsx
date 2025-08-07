@@ -38,7 +38,20 @@ export default function CopilotKitPage() {
 // State of the agent, make sure this aligns with your agent's state.
 type AgentState = {
   proverbs: string[];
-  weather_cards: Array<{ location: string; id: string }>;
+  weather_cards: Array<{ 
+    location: string; 
+    id: string; 
+    weatherData?: {
+      city: string;
+      province: string;
+      temperature: string;
+      weather: string;
+      humidity: string;
+      wind_direction: string;
+      wind_power: string;
+      report_time: string;
+    } | null;
+  }>;
 }
 
 function YourMainContent({ themeColor }: { themeColor: string }) {
@@ -88,12 +101,23 @@ function YourMainContent({ themeColor }: { themeColor: string }) {
     description: "Add a weather card for a specific location to the center of the page.",
     parameters: [
       { name: "location", type: "string", required: true, description: "The location for the weather card" },
+      { name: "weatherData", type: "object", required: false, description: "Weather data from backend (optional)" },
     ],
-    handler: ({ location }) => {
-      console.log("Adding weather card for:", location);
+    handler: ({ location, weatherData }) => {
+      console.log("Adding weather card for:", location, "with data:", weatherData);
       const newCard = {
         location,
         id: `weather-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        weatherData: weatherData ? {
+          city: (weatherData as any).city || "",
+          province: (weatherData as any).province || "",
+          temperature: (weatherData as any).temperature || "",
+          weather: (weatherData as any).weather || "",
+          humidity: (weatherData as any).humidity || "",
+          wind_direction: (weatherData as any).wind_direction || "",
+          wind_power: (weatherData as any).wind_power || "",
+          report_time: (weatherData as any).report_time || ""
+        } : null,
       };
       const currentWeatherCards = Array.isArray(state.weather_cards) ? state.weather_cards : [];
       console.log("Current weather cards:", currentWeatherCards);
@@ -138,6 +162,7 @@ function YourMainContent({ themeColor }: { themeColor: string }) {
                   key={card.id}
                   location={card.location} 
                   themeColor={themeColor}
+                  weatherData={card.weatherData}
                   onRemove={() => {
                     const currentWeatherCards = Array.isArray(state.weather_cards) ? state.weather_cards : [];
                     setState({
@@ -204,11 +229,22 @@ function SunIcon() {
 function WeatherCard({ 
   location, 
   themeColor, 
-  onRemove 
+  onRemove,
+  weatherData
 }: { 
   location?: string, 
   themeColor: string,
-  onRemove?: () => void 
+  onRemove?: () => void,
+  weatherData?: {
+    city: string;
+    province: string;
+    temperature: string;
+    weather: string;
+    humidity: string;
+    wind_direction: string;
+    wind_power: string;
+    report_time: string;
+  } | null
 }) {
     return (
     <div
@@ -227,34 +263,47 @@ function WeatherCard({
     <div className="bg-white/20 p-4 w-full">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-xl font-bold text-white capitalize">{location}</h3>
-          <p className="text-white">Current Weather</p>
+          <h3 className="text-xl font-bold text-white capitalize">{weatherData?.city || location}</h3>
+          <p className="text-white">{weatherData ? "实时天气" : "Current Weather"}</p>
         </div>
         <SunIcon />
       </div>
       
       <div className="mt-4 flex items-end justify-between">
-        <div className="text-3xl font-bold text-white">70°</div>
-        <div className="text-sm text-white">Clear skies</div>
+        <div className="text-3xl font-bold text-white">
+          {weatherData?.temperature ? `${weatherData.temperature}°C` : "70°"}
+        </div>
+        <div className="text-sm text-white">
+          {weatherData?.weather || "Clear skies"}
+        </div>
       </div>
       
       <div className="mt-4 pt-4 border-t border-white">
         <div className="grid grid-cols-3 gap-2 text-center">
           <div>
-            <p className="text-white text-xs">Humidity</p>
-            <p className="text-white font-medium">45%</p>
+            <p className="text-white text-xs">湿度</p>
+            <p className="text-white font-medium">{weatherData?.humidity ? `${weatherData.humidity}%` : "45%"}</p>
           </div>
           <div>
-            <p className="text-white text-xs">Wind</p>
-            <p className="text-white font-medium">5 mph</p>
+            <p className="text-white text-xs">风向</p>
+            <p className="text-white font-medium">{weatherData?.wind_direction || "5 mph"}</p>
           </div>
           <div>
-            <p className="text-white text-xs">Feels Like</p>
-            <p className="text-white font-medium">72°</p>
+            <p className="text-white text-xs">风力</p>
+            <p className="text-white font-medium">{weatherData?.wind_power || "72°"}</p>
           </div>
         </div>
       </div>
+      
+      {weatherData?.report_time && (
+        <div className="mt-2 pt-2 border-t border-white/20">
+          <p className="text-white text-xs text-center">
+            更新时间: {weatherData.report_time}
+          </p>
+        </div>
+      )}
     </div>
   </div>
   );
 }
+
